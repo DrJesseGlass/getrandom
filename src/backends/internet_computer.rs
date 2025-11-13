@@ -7,6 +7,19 @@
 
 use crate::Error;
 use core::mem::MaybeUninit;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use ic_cdk::api::time;
+
+// SplitMix64: tiny, fast, good distribution for non-crypto use
+#[inline]
+fn splitmix64_next(x: &mut u64) -> u64 {
+    *x = x.wrapping_add(0x9E3779B97F4A7C15);
+    let mut z = *x;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+    z ^ (z >> 31)
+}
+
 
 pub fn fill_inner(dest: &mut [MaybeUninit<u8>]) -> Result<(), Error> {
     let len = dest.len();
@@ -14,16 +27,23 @@ pub fn fill_inner(dest: &mut [MaybeUninit<u8>]) -> Result<(), Error> {
         return Ok(());
     }
 
-    // Deterministic fill pattern - repeatable but sufficient for non-crypto use
-    // Uses a simple PRNG-like pattern for better distribution
-    for (i, byte) in dest.iter_mut().enumerate() {
-        unsafe {
-            // Simple mixing function for better value distribution
-            let val = (i.wrapping_mul(73).wrapping_add(197)) as u8;
-            byte.write(val);
-        }
-    }
+    // Consensus timestamp: deterministic across replicas in an UPDATE call.
+    // (In a QUERY it is *not* consensus-certified.)
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    let mut state = (time() as u64) ^ ((len as u64).wrapping_mul(0x9E3779B97F4A7C15));
 
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    let mut state = (len as u64).wrapping_mul(0x9E3779B97F4A7C15); // fallback seed
+
+    let mut i = 0;
+    while i < len {
+        let word = splitmix64_next(&mut state).to_le_bytes();
+        let n = core::cmp::min(8, len - i);
+        for j in 0..n {
+            unsafe { dest[i + j].write(word[j]); }
+        }
+        i += n;
+    }
     Ok(())
 }
 
