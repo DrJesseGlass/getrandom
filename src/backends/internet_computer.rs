@@ -33,9 +33,7 @@ pub fn fill_inner(dest: &mut [MaybeUninit<u8>]) -> Result<(), Error> {
     }
 
     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-    let mut state = time()
-        ^ instruction_counter()
-        ^ (len as u64).wrapping_mul(0x9E3779B97F4A7C15);
+    let mut state = time() ^ instruction_counter() ^ (len as u64).wrapping_mul(0x9E3779B97F4A7C15);
 
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     let mut state = (len as u64).wrapping_mul(0x9E3779B97F4A7C15);
