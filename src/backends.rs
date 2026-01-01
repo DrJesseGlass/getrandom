@@ -11,6 +11,9 @@ cfg_if! {
     if #[cfg(getrandom_backend = "custom")] {
         mod custom;
         pub use custom::*;
+    } else if #[cfg(getrandom_backend = "ic")] {
+        mod internet_computer;
+        pub use internet_computer::*;
     } else if #[cfg(getrandom_backend = "linux_getrandom")] {
         mod getrandom;
         pub use getrandom::*;
